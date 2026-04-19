@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>VarsChat 💬</title>
+
+<!-- ✅ MOBILE FIX -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+<style>
+html,body{
+ margin:0;
+ height:100%;
+ overflow:hidden;
+ font-family:sans-serif;
+ background:#e5ddd5;
+}
+
+/* LOGIN */
+#authBox{
+ position:fixed;
+ inset:0;
+ display:flex;
+ justify-content:center;
+ align-items:center;
+ background:#e5ddd5;
+}
+.card{
+ width:320px;
+ background:#fff;
+ padding:20px;
+ border-radius:12px;
+ text-align:center;
+}
+input{
+ width:100%;
+ padding:12px;
+ margin:8px 0;
+ border:none;
+ border-radius:8px;
+ background:#f0f2f5;
+ font-size:16px; /* 🔥 mobile zoom fix */
+}
+.card button{
+ width:100%;
+ padding:12px;
+ margin-top:10px;
+ border:none;
+ border-radius:8px;
+ background:#00a884;
+ color:white;
+}
+
+/* MAIN */
+#main{
+ display:none;
+ height:100dvh; /* 🔥 FIX */
+}
+
+/* SIDEBAR */
+#sidebar{
+ height:100dvh;
+ background:#fff;
+ overflow:auto;
+}
+
+/* CHAT */
+#chatArea{
+ display:none;
+ flex-direction:column;
+ height:100dvh;
+}
+
+/* TOP */
+#topbar{
+ display:flex;
+ align-items:center;
+ padding:10px;
+ background:#f0f2f5;
+}
+
+/* BACK */
+#backBtn{
+ margin-right:10px;
+ font-size:20px;
+}
+
+/* AVATAR */
+.avatar{
+ width:40px;
+ height:40px;
+ border-radius:50%;
+ background:#00a884;
+ color:white;
+ display:flex;
+ align-items:center;
+ justify-content:center;
+}
+
+/* CHAT BODY */
+#chat{
+ flex:1;
+ overflow-y:auto;
+ -webkit-overflow-scrolling:touch;
+ padding:10px;
+ background:#efeae2;
+}
+
+.msg{
+ max-width:70%;
+ padding:10px;
+ margin:5px;
+ border-radius:10px;
+}
+.me{background:#d9fdd3;margin-left:auto}
+.other{background:#fff}
+
+.meta{
+ font-size:10px;
+ color:#555;
+}
+
+/* INPUT */
+#inputBox{
+ display:flex;
+ padding:10px;
+ background:#f0f2f5;
+}
+#msg{
+ flex:1;
+ padding:10px;
+ border-radius:25px;
+ border:none;
+ font-size:16px;
+}
+#sendBtn{
+ width:45px;
+ height:45px;
+ border-radius:50%;
+ background:#00a884;
+ color:white;
+ border:none;
+}
+</style>
+</head>
+
+<body>
+
+<!-- LOGIN -->
+<div id="authBox">
+<div class="card">
+<h2>Login</h2>
+
+<input id="email" placeholder="Email">
+<input id="pass" type="password" placeholder="Password">
+
+<button id="loginBtn">Login</button>
+</div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+<!-- CHAT LIST -->
+<div id="sidebar">
+<h3 style="padding:10px">Chats</h3>
+<div id="userList"></div>
+</div>
+
+<!-- CHAT -->
+<div id="chatArea">
+
+<div id="topbar">
+<span id="backBtn">←</span>
+<div class="avatar" id="avatar">U</div>
+<div id="chatUser"></div>
+</div>
+
+<div id="chat"></div>
+
+<div id="inputBox">
+<input id="msg" placeholder="Type message">
+<button id="sendBtn">➤</button>
+</div>
+
+</div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-database.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
+
+const app = initializeApp({
+ apiKey:"AIzaSyDLkDt92C9EYRcBC1TTntg8zCtwibCfLLw",
+ authDomain:"varschatapp.firebaseapp.com",
+ databaseURL:"https://varschatapp-default-rtdb.asia-southeast1.firebasedatabase.app",
+ projectId:"varschatapp"
+});
+
+const db=getDatabase(app);
+const auth=getAuth(app);
+
+let uid,currentUser;
+
+/* LOGIN */
+loginBtn.onclick=()=>signInWithEmailAndPassword(auth,email.value,pass.value);
+
+/* AUTH */
+onAuthStateChanged(auth,user=>{
+ if(user){
+  uid=user.uid;
+  authBox.style.display="none";
+  main.style.display="block";
+  loadUsers();
+ }
+});
+
+/* USERS */
+function loadUsers(){
+ onValue(ref(db,"users"),snap=>{
+  userList.innerHTML="";
+  snap.forEach(s=>{
+   if(s.key!==uid){
+    let u=s.val();
+
+    let div=document.createElement("div");
+    div.style.padding="12px";
+    div.style.borderBottom="1px solid #eee";
+
+    div.innerHTML=`
+      <div class="avatar">${u.name[0]}</div>
+      ${u.name}
+    `;
+
+    div.onclick=()=>{
+     currentUser=s.key;
+     chatUser.innerText=u.name;
+     avatar.innerText=u.name[0];
+
+     sidebar.style.display="none";
+     chatArea.style.display="flex";
+
+     loadChat();
+    };
+
+    userList.appendChild(div);
+   }
+  });
+ });
+}
+
+/* BACK */
+backBtn.onclick=()=>{
+ chatArea.style.display="none";
+ sidebar.style.display="block";
+};
+
+/* SEND */
+sendBtn.onclick=()=>{
+ let text=msg.value.trim();
+ if(!text)return;
+
+ let chatId=[uid,currentUser].sort().join("_");
+
+ set(ref(db,"messages/"+chatId+"/"+Date.now()),{
+  text,
+  sender:uid,
+  time:Date.now()
+ });
+
+ msg.value="";
+};
+
+/* CHAT */
+function loadChat(){
+ let chatId=[uid,currentUser].sort().join("_");
+
+ onValue(ref(db,"messages/"+chatId),snap=>{
+  chat.innerHTML="";
+  let data=snap.val();
+  if(!data)return;
+
+  Object.values(data).forEach(m=>{
+   let div=document.createElement("div");
+   div.className="msg "+(m.sender===uid?"me":"other");
+
+   div.innerHTML=`
+    ${m.text}
+    <div class="meta">${new Date(m.time).toLocaleTimeString()}</div>
+   `;
+
+   chat.appendChild(div);
+  });
+
+  chat.scrollTop=chat.scrollHeight;
+ });
+}
+</script>
+
+</body>
+</html>
