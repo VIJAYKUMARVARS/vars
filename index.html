@@ -210,7 +210,6 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/fireba
 import { getDatabase, ref, set, onValue, off, update, onDisconnect } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-database.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-auth.js";
 
-/* FIREBASE CONFIG */
 const app = initializeApp({
  apiKey:"AIzaSyDLkDt92C9EYRcBC1TTntg8zCtwibCfLLw",
  authDomain:"varschatapp.firebaseapp.com",
@@ -222,24 +221,22 @@ const db=getDatabase(app);
 const auth=getAuth(app);
 
 let uid,currentUser,chatRef,typingRef,statusRef;
+let sending=false; // FIX duplicate
 
-/* LOGIN */
 loginBtn.onclick=()=>signInWithEmailAndPassword(auth,email.value,pass.value).catch(e=>alert(e.message));
 
-/* SIGNUP */
 signupBtn.onclick=async()=>{
  let res=await createUserWithEmailAndPassword(auth,email.value,pass.value);
  await set(ref(db,"users/"+res.user.uid),{name:name.value});
 };
 
-/* AUTH */
 onAuthStateChanged(auth,user=>{
  if(user){
   uid=user.uid;
   authBox.style.display="none";
   main.style.display="flex";
 
-  let sRef=ref(db,"status/"+uid);
+  const sRef=ref(db,"status/"+uid);
   set(sRef,{online:true,lastSeen:Date.now()});
   onDisconnect(sRef).set({online:false,lastSeen:Date.now()});
 
@@ -247,7 +244,6 @@ onAuthStateChanged(auth,user=>{
  }
 });
 
-/* USERS */
 function loadUsers(){
  onValue(ref(db,"users"),snap=>{
   userList.innerHTML="";
@@ -278,7 +274,7 @@ function loadUsers(){
  });
 }
 
-/* STATUS */
+/* FIX STATUS */
 function listenStatus(){
  if(statusRef) off(statusRef);
  statusRef=ref(db,"status/"+currentUser);
@@ -292,6 +288,7 @@ function listenStatus(){
 
 /* TYPING */
 msg.oninput=()=>{
+ if(!currentUser)return;
  let chatId=[uid,currentUser].sort().join("_");
  set(ref(db,"typing/"+chatId+"/"+uid),true);
  setTimeout(()=>set(ref(db,"typing/"+chatId+"/"+uid),false),800);
@@ -316,10 +313,14 @@ function listenTyping(){
  });
 }
 
-/* SEND */
+/* FIX SEND */
 sendBtn.onclick=async()=>{
+ if(!currentUser || sending) return;
+
  let text=msg.value.trim();
  if(!text)return;
+
+ sending=true;
 
  let chatId=[uid,currentUser].sort().join("_");
  let id=uid+"_"+Date.now();
@@ -329,9 +330,17 @@ sendBtn.onclick=async()=>{
  });
 
  msg.value="";
+ setTimeout(()=>sending=false,400);
 };
 
-/* CHAT */
+/* ENTER FIX */
+msg.addEventListener("keypress",e=>{
+ if(e.key==="Enter"){
+  e.preventDefault();
+  sendBtn.click();
+ }
+});
+
 function loadChat(){
  let chatId=[uid,currentUser].sort().join("_");
  if(chatRef) off(chatRef);
@@ -358,21 +367,6 @@ function loadChat(){
     update(ref(db,"messages/"+chatId+"/"+key),{seen:true});
    }
 
-   /* EDIT */
-   if(m.sender===uid){
-    div.onclick=()=>{
-     let t=prompt("Edit",m.text);
-     if(t) update(ref(db,"messages/"+chatId+"/"+key),{text:t});
-    };
-
-    /* DELETE */
-    div.ondblclick=()=>{
-     if(confirm("Delete?")){
-      update(ref(db,"messages/"+chatId+"/"+key),{text:"Deleted"});
-     }
-    };
-   }
-
    chat.appendChild(div);
   });
 
@@ -380,11 +374,9 @@ function loadChat(){
  });
 }
 
-/* EMOJI */
 emojiBtn.onclick=()=>emojiPicker.style.display="block";
 emojiPicker.onclick=e=>msg.value+=e.target.innerText;
 
-/* LOGOUT */
 logoutBtn.onclick=()=>{
  signOut(auth);
  location.reload();
